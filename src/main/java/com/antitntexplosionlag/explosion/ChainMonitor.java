@@ -13,6 +13,8 @@ public final class ChainMonitor {
     private int maxExplosionsPerTick;
     private long totalTntTicks;
     private long totalExplosions;
+    private long mergedClusters;
+    private long mergedTnt;
 
     public synchronized void onTntTick(long tick) {
         roll(tick);
@@ -64,6 +66,20 @@ public final class ChainMonitor {
         return totalExplosions;
     }
 
+    /** Records one merged cluster blast that replaced {@code tntCount} TNT. */
+    public synchronized void onMerged(int tntCount) {
+        mergedClusters++;
+        mergedTnt += tntCount;
+    }
+
+    public synchronized long mergedClusters() {
+        return mergedClusters;
+    }
+
+    public synchronized long mergedTnt() {
+        return mergedTnt;
+    }
+
     public synchronized void reset() {
         tick = Long.MIN_VALUE;
         tntTicks = 0;
@@ -72,6 +88,8 @@ public final class ChainMonitor {
         maxExplosionsPerTick = 0;
         totalTntTicks = 0;
         totalExplosions = 0;
+        mergedClusters = 0;
+        mergedTnt = 0;
     }
 
     private void roll(long tick) {

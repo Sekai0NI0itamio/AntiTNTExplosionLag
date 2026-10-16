@@ -42,13 +42,18 @@ class ChainMonitorTest {
         m.onTntTick(1L);
         m.onTntTick(2L);
         m.onExplosion(2L);
+        m.onMerged(25);
         assertEquals(2, m.totalTntTicks());
         assertEquals(1, m.totalExplosions());
         assertEquals(1, m.maxExplosionsPerTick());
+        assertEquals(1, m.mergedClusters());
+        assertEquals(25, m.mergedTnt());
         m.reset();
         assertEquals(0, m.totalTntTicks());
         assertEquals(0, m.totalExplosions());
         assertEquals(0, m.maxTntPerTick());
         assertEquals(0, m.tntThisTick(2L));
+        assertEquals(0, m.mergedClusters());
+        assertEquals(0, m.mergedTnt());
     }
 }

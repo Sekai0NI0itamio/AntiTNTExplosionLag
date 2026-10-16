@@ -14,10 +14,18 @@ Invalid numbers are clamped into range; corrupt files keep current defaults.
 | `stagedBlocksPerTick` | int | `2048` | 64–65536 | Chunk budget for staged mode; also the takeover threshold. |
 | `diagnosticsEnabled` | bool | `false` | — | Extra debug logging (dedup counts). `/antitnt stats` works regardless. |
 
+| `clusterDetonationEnabled` | bool | `true` | — | Merge transitively connected primed TNT into one blast (combined power `4*cbrt(n)`, capped). One big crater at once instead of a sequential chain. Set `false` for vanilla chaining. |
+| `clusterRadius` | double | `7.0` | 2–16 | Connection distance for cluster membership (transitive). |
+| `clusterMinSize` | int | `3` | 2–64 | Minimum connected TNT to trigger a merge; pairs/singles explode vanilla-style. |
+| `clusterMaxPower` | float | `48.0` | 8–128 | Power cap for merged blasts. |
+| `clusterMaxScan` | int | `2048` | 64–8192 | Entities visited per cluster scan (perf guard). |
+
 ## Which side installs the mod
 
-Server only. All hooks are server hooks (`server` mixin set); nothing
-requires clients to install anything, and no feature reads client state.
+Server install gives the full effect (cluster merging, dedup, staged mode,
+profiler). Client install adds the client-side cosmetic throttle: duplicate
+explosion bursts/sounds during storms are skipped locally, which is the main
+FPS saver. Either side works alone; both together is best.
 
 ## Staged mode warning
 

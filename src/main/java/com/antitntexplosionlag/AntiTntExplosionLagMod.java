@@ -3,21 +3,29 @@ package com.antitntexplosionlag;
 import com.antitntexplosionlag.command.AntiTntCommands;
 import com.antitntexplosionlag.config.AntiTntConfig;
 import com.antitntexplosionlag.explosion.ChainMonitor;
+import com.antitntexplosionlag.explosion.ClusterMerge;
 import com.antitntexplosionlag.explosion.EffectThrottler;
 import com.antitntexplosionlag.explosion.ExplosionProfiler;
 import com.antitntexplosionlag.explosion.StagedProcessor;
 import net.fabricmc.api.ModInitializer;
 import net.fabricmc.fabric.api.command.v2.CommandRegistrationCallback;
 import net.fabricmc.fabric.api.event.lifecycle.v1.ServerTickEvents;
+import net.minecraft.entity.Entity;
+import net.minecraft.entity.TntEntity;
 import net.minecraft.util.math.BlockPos;
+import net.minecraft.util.math.Box;
+import net.minecraft.world.World;
 import net.minecraft.world.explosion.Explosion;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.util.ArrayDeque;
 import java.util.ArrayList;
+import java.util.Collections;
+import java.util.IdentityHashMap;
 import java.util.List;
 import java.util.Queue;
+import java.util.Set;
 import java.util.concurrent.atomic.AtomicLong;
 
 /**
@@ -36,6 +44,7 @@ public class AntiTntExplosionLagMod implements ModInitializer {
     private static volatile EffectThrottler throttler;
     private static final AtomicLong EXPLOSION_SEQ = new AtomicLong();
     private static volatile long serverTick;
+    private static volatile long clientTick;
 
     /** Pending staged remainders; appended and drained on the server thread. */
     private static final Queue<PendingStage> STAGES = new ArrayDeque<>();
@@ -69,6 +78,20 @@ public class AntiTntExplosionLagMod implements ModInitializer {
 
     public static long serverTick() {
         return serverTick;
+    }
+
+    /** Advanced by the client entrypoint; drives client-side effect windows. */
+    public static void onClientTick() {
+        clientTick++;
+    }
+
+    /**
+     * Tick basis for cosmetic windows. The dedicated server uses the server
+     * tick; a pure client (no integrated server) uses the client tick so
+     * throttle budgets still roll over instead of wedging shut.
+     */
+    public static long effectiveTick() {
+        return Math.max(serverTick, clientTick);
     }
 
     public static int stagedPending() {
@@ -146,6 +169,76 @@ public class AntiTntExplosionLagMod implements ModInitializer {
         }
     }
 
+    /**
+     * Finds the transitively connected cluster of primed TNT around
+     * {@code root}: every member is within {@code radius} of at least one
+     * other member. Bounded by {@code maxScan} visited entities so a huge
+     * field can't stall the tick during the scan itself. Server thread only.
+     */
+    public static List<TntEntity> collectCluster(World world, TntEntity root, double radius, int maxScan) {
+        List<TntEntity> found = new ArrayList<>();
+        Set<TntEntity> seen = Collections.newSetFromMap(new IdentityHashMap<>());
+        ArrayDeque<TntEntity> queue = new ArrayDeque<>();
+        seen.add(root);
+        queue.add(root);
+        found.add(root);
+        double r2 = radius * radius;
+        while (!queue.isEmpty() && found.size() < maxScan) {
+            TntEntity cur = queue.poll();
+            double cx = cur.getX();
+            double cy = cur.getY();
+            double cz = cur.getZ();
+            Box box = new Box(cx - radius, cy - radius, cz - radius,
+                    cx + radius, cy + radius, cz + radius);
+            for (TntEntity t : world.getEntitiesByClass(TntEntity.class, box, Entity::isAlive)) {
+                if (!seen.add(t)) {
+                    continue;
+                }
+                double dx = t.getX() - cx;
+                double dy = t.getY() - cy;
+                double dz = t.getZ() - cz;
+                if (dx * dx + dy * dy + dz * dz > r2) {
+                    continue;
+                }
+                found.add(t);
+                queue.add(t);
+                if (found.size() >= maxScan) {
+                    break;
+                }
+            }
+        }
+        return found;
+    }
+
+    /**
+     * Replaces a connected TNT cluster with a single merged blast at its
+     * centroid. All members are discarded first, then one vanilla explosion
+     * with combined power runs the normal collect/affect path (so dedup,
+     * throttle, profiler, and staged logic all still apply to it).
+     *
+     * @return number of TNT merged
+     */
+    public static int mergeAndDetonate(World world, List<TntEntity> cluster, TntEntity cause) {
+        AntiTntConfig cfg = AntiTntConfig.get();
+        List<double[]> points = new ArrayList<>(cluster.size());
+        for (TntEntity t : cluster) {
+            points.add(new double[]{t.getX(), t.getY(), t.getZ()});
+        }
+        double[] center = ClusterMerge.centroid(points);
+        float power = ClusterMerge.combinedPower(cluster.size(), 4.0f, cfg.clusterMaxPower);
+        for (TntEntity t : cluster) {
+            t.remove(Entity.RemovalReason.DISCARDED);
+        }
+        CHAINS.onMerged(cluster.size());
+        if (cfg.diagnosticsEnabled) {
+            LOG.info("[AntiTNTExplosionLag] merged {} connected TNT into one power-{} blast",
+                    cluster.size(), String.format("%.1f", power));
+        }
+        world.createExplosion(cause, center[0], center[1], center[2], power,
+                World.ExplosionSourceType.TNT);
+        return cluster.size();
+    }
+
     @Override
     public void onInitialize() {
         AntiTntConfig.load();
@@ -156,9 +249,11 @@ public class AntiTntExplosionLagMod implements ModInitializer {
         ServerTickEvents.END_SERVER_TICK.register(server -> drainStaged());
         AntiTntConfig cfg = AntiTntConfig.get();
         LOG.info("[AntiTNTExplosionLag] initialized: master={} dedup={} throttle={} (maxFx={} radius={}) "
-                        + "staged={} (budget={}) diag={}",
+                        + "staged={} (budget={}) cluster={} (radius={} min={} maxPower={}) diag={}",
                 cfg.masterEnabled, cfg.dedupEnabled, cfg.effectThrottleEnabled,
                 cfg.maxEffectsPerTick, cfg.throttleRadius,
-                cfg.stagedProcessingEnabled, cfg.stagedBlocksPerTick, cfg.diagnosticsEnabled);
+                cfg.stagedProcessingEnabled, cfg.stagedBlocksPerTick,
+                cfg.clusterDetonationEnabled, cfg.clusterRadius, cfg.clusterMinSize,
+                cfg.clusterMaxPower, cfg.diagnosticsEnabled);
     }
 }

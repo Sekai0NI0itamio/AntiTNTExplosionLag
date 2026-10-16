@@ -3,7 +3,7 @@
   "id": "antitntexplosionlag",
   "version": "${version}",
   "name": "AntiTNTExplosionLag",
-  "description": "Server-side TNT/explosion tick-lag reduction: affected-block dedup, per-tick cosmetic effect throttle (vanilla particles flag), opt-in staged processing, explosion profiler. Defaults preserve vanilla gameplay.",
+  "description": "Server-side TNT/explosion tick-lag reduction: connected-TNT cluster detonation (one merged blast, not a chain), affected-block dedup, per-tick cosmetic effect throttle, client-side burst throttle, opt-in staged processing, explosion profiler.",
   "authors": [
     "Sekai0NI0itamio"
   ],
@@ -12,6 +12,9 @@
   "entrypoints": {
     "main": [
       "com.antitntexplosionlag.AntiTntExplosionLagMod"
+    ],
+    "client": [
+      "com.antitntexplosionlag.AntiTntClient"
     ]
   },
   "mixins": [

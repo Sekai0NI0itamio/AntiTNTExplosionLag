@@ -1,6 +1,7 @@
 package com.antitntexplosionlag;
 
 import com.antitntexplosionlag.bench.BenchmarkPlan;
+import com.antitntexplosionlag.explosion.ClusterMerge;
 import com.antitntexplosionlag.explosion.ExplosionMath;
 
 import java.io.IOException;
@@ -80,6 +81,32 @@ public final class BenchmarkRunner {
         md.append("- removed per pass: ").append(removed).append("\n");
         md.append("- avg pass: ").append(fmt(dedupAvg)).append(" ms\n\n");
 
+        // --- Cluster detection on a solid 21^3 TNT fill (user scenario). ---
+        List<double[]> fill = new ArrayList<>(9261);
+        for (int x = 0; x < 21; x++) {
+            for (int y = 0; y < 21; y++) {
+                for (int z = 0; z < 21; z++) {
+                    fill.add(new double[]{x, y, z});
+                }
+            }
+        }
+        for (int i = 0; i < WARMUP; i++) {
+            ClusterMerge.components(new ArrayList<>(fill), 7.0);
+        }
+        long clusterTotal = 0;
+        int clusterGroups = 0;
+        for (int i = 0; i < MEASURED; i++) {
+            long s = System.nanoTime();
+            clusterGroups = ClusterMerge.components(new ArrayList<>(fill), 7.0).size();
+            clusterTotal += System.nanoTime() - s;
+        }
+        double clusterAvg = clusterTotal / (MEASURED * 1_000_000.0);
+        md.append("## Cluster detection (9261-point solid fill)\n\n");
+        md.append("- components found: ").append(clusterGroups).append("\n");
+        md.append("- avg pass: ").append(fmt(clusterAvg)).append(" ms\n");
+        md.append("- merged power for full fill: ")
+                .append(fmt(ClusterMerge.combinedPower(9261, 4.0f, 48.0f))).append(" (capped)\n\n");
+
         // --- Scenario workload specs. ---
         md.append("## Scenario workload specs\n\n");
         md.append("| scenario | tnt | ticks | area |\n|---|---|---|---|\n");
@@ -98,6 +125,8 @@ public final class BenchmarkRunner {
                 + "ms fast=" + fmt(fastAvg) + "ms");
         System.out.println("[AntiTNT benchmark] dedup removed=" + removed
                 + " avg=" + fmt(dedupAvg) + "ms");
+        System.out.println("[AntiTNT benchmark] cluster groups=" + clusterGroups
+                + " avg=" + fmt(clusterAvg) + "ms");
         System.out.println("[AntiTNT benchmark] report: " + report.toAbsolutePath());
         if (!equal) {
             throw new IllegalStateException("optimized exposure diverged from reference");

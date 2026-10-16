@@ -58,6 +58,24 @@ public final class AntiTntConfig {
     public volatile int stagedBlocksPerTick = 2048;
     /** Diagnostic logging + /antitnt stats counters. */
     public volatile boolean diagnosticsEnabled = false;
+    /**
+     * Merge connected primed TNT into ONE explosion instead of a sequential
+     * chain. When a TNT detonates, all transitively connected primed TNT
+     * inside {@link #clusterRadius} detonate together as a single blast with
+     * combined power ({@code 4 * cbrt(n)}, capped). This is an intentional
+     * gameplay trade-off (one big crater now vs N vanilla chained blasts),
+     * enabled because sequential chains are the dominant lag source.
+     * Disable to restore vanilla chaining.
+     */
+    public volatile boolean clusterDetonationEnabled = true;
+    /** Connection distance (blocks) for cluster membership, transitive. */
+    public volatile double clusterRadius = 7.0;
+    /** Minimum cluster size to merge; smaller groups explode vanilla-style. */
+    public volatile int clusterMinSize = 3;
+    /** Hard cap on merged-blast power. */
+    public volatile float clusterMaxPower = 48.0f;
+    /** Upper bound on entities visited per cluster scan (perf guard). */
+    public volatile int clusterMaxScan = 2048;
 
     private AntiTntConfig() {
     }
@@ -85,6 +103,11 @@ public final class AntiTntConfig {
                 INSTANCE.stagedProcessingEnabled = loaded.stagedProcessingEnabled;
                 INSTANCE.stagedBlocksPerTick = clamp(loaded.stagedBlocksPerTick, 64, 65536);
                 INSTANCE.diagnosticsEnabled = loaded.diagnosticsEnabled;
+                INSTANCE.clusterDetonationEnabled = loaded.clusterDetonationEnabled;
+                INSTANCE.clusterRadius = clampDouble(loaded.clusterRadius, 2.0, 16.0);
+                INSTANCE.clusterMinSize = clamp(loaded.clusterMinSize, 2, 64);
+                INSTANCE.clusterMaxPower = clampFloat(loaded.clusterMaxPower, 8.0f, 128.0f);
+                INSTANCE.clusterMaxScan = clamp(loaded.clusterMaxScan, 64, 8192);
             }
         } catch (Exception e) {
             LOG.log(Level.WARNING, "[AntiTNTExplosionLag] Bad config, keeping defaults: " + e.getMessage());
@@ -103,7 +126,9 @@ public final class AntiTntConfig {
 
     /** Applies raw values with the same clamping as {@link #load()} (used by tests/commands). */
     public static void applyRaw(boolean master, boolean dedup, boolean throttle, int maxFx,
-                               double radius, boolean staged, int stagedBudget, boolean diag) {
+                               double radius, boolean staged, int stagedBudget, boolean diag,
+                               boolean cluster, double clusterRadius, int clusterMin,
+                               float clusterMaxPower, int clusterMaxScan) {
         INSTANCE.masterEnabled = master;
         INSTANCE.dedupEnabled = dedup;
         INSTANCE.effectThrottleEnabled = throttle;
@@ -112,6 +137,19 @@ public final class AntiTntConfig {
         INSTANCE.stagedProcessingEnabled = staged;
         INSTANCE.stagedBlocksPerTick = clamp(stagedBudget, 64, 65536);
         INSTANCE.diagnosticsEnabled = diag;
+        INSTANCE.clusterDetonationEnabled = cluster;
+        INSTANCE.clusterRadius = clampDouble(clusterRadius, 2.0, 16.0);
+        INSTANCE.clusterMinSize = clamp(clusterMin, 2, 64);
+        INSTANCE.clusterMaxPower = clampFloat(clusterMaxPower, 8.0f, 128.0f);
+        INSTANCE.clusterMaxScan = clamp(clusterMaxScan, 64, 8192);
+    }
+
+    /** Legacy overload without cluster options (cluster settings untouched). */
+    public static void applyRaw(boolean master, boolean dedup, boolean throttle, int maxFx,
+                               double radius, boolean staged, int stagedBudget, boolean diag) {
+        applyRaw(master, dedup, throttle, maxFx, radius, staged, stagedBudget, diag,
+                INSTANCE.clusterDetonationEnabled, INSTANCE.clusterRadius, INSTANCE.clusterMinSize,
+                INSTANCE.clusterMaxPower, INSTANCE.clusterMaxScan);
     }
 
     private static int clamp(int v, int min, int max) {
@@ -120,6 +158,13 @@ public final class AntiTntConfig {
 
     private static double clampDouble(double v, double min, double max) {
         if (Double.isNaN(v)) {
+            return min;
+        }
+        return Math.min(max, Math.max(min, v));
+    }
+
+    private static float clampFloat(float v, float min, float max) {
+        if (Float.isNaN(v)) {
             return min;
         }
         return Math.min(max, Math.max(min, v));

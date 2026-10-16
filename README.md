@@ -11,6 +11,7 @@ explosive workloads. Defaults preserve vanilla gameplay.
 | Affected-block dedup after vanilla collection | ON | None — destroying one block twice equals destroying it once; only shrinks the apply loop |
 | Per-tick cosmetic effect throttle via vanilla's own `affectWorld(particles=false)` path | ON | Cosmetic only — blocks still break, entities still take damage; only the duplicate particle/sound burst is skipped during same-tick storms |
 | Explosion profiler (collect/affect timings, chain counters) + `/antitnt stats` | ON | None — observation only |
+| Cluster detonation: connected primed TNT explodes as ONE merged blast | ON | Intended trade-off — one big crater immediately instead of N sequential vanilla chain blasts; disable for vanilla chaining |
 | Staged application of huge affected-block lists across ticks | OFF (opt-in) | **Changes timing** — delays block destruction and chain reactions |
 | Primed-TNT chain monitoring | ON | None — counting only |
 
@@ -26,7 +27,11 @@ redundant work around that.
 - Fabric Loader **>= 0.16.14**
 - Fabric API (any recent 1.21.1 build; tested with `0.102.0+1.21.1`)
 - Java **21**
-- Install on the **server only**. Clients do not need the mod.
+- Install on the **server** for the full effect (cluster merging, dedup,
+  staged mode). Installing on the **client too** enables the client-side
+  cosmetic throttle, which skips duplicate explosion bursts/sounds during
+  storms — the main FPS saver on weak machines. Server-only install still
+  fixes the server tick; client-only install still smooths rendering.
 
 ## Installation
 
@@ -47,7 +52,12 @@ redundant work around that.
   "maxEffectsPerTick": 4,
   "throttleRadius": 32.0,
   "stagedProcessingEnabled": false,
-  "stagedBlocksPerTick": 2048,
+    "stagedBlocksPerTick": 2048,
+    "clusterDetonationEnabled": true,
+    "clusterRadius": 7.0,
+    "clusterMinSize": 3,
+    "clusterMaxPower": 48.0,
+    "clusterMaxScan": 2048,
   "diagnosticsEnabled": false
 }
 ```
