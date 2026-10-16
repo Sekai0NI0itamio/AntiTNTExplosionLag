@@ -74,8 +74,33 @@ public final class AntiTntConfig {
     public volatile int clusterMinSize = 3;
     /** Hard cap on merged-blast power. */
     public volatile float clusterMaxPower = 48.0f;
-    /** Upper bound on entities visited per cluster scan (perf guard). */
-    public volatile int clusterMaxScan = 2048;
+    /** Half-edge of the cube scanned for primed TNT around an ignition. */
+    public volatile double mergeFieldRadius = 64.0;
+    /**
+     * Field populations at or below this size get exact transitive grouping;
+     * larger fields are treated as one dense cluster (centroid + capped
+     * power, no quadratic pass), which is what keeps millions instant.
+     */
+    public volatile int exactClusterCap = 20000;
+    /**
+     * Ticks a merged blast keeps absorbing chain primers in its crater.
+     * Zero disables absorption (pure chaining returns).
+     */
+    public volatile int mergeWindowTicks = 10;
+    /** Extra radius beyond the blast's own reach covered by the window. */
+    public volatile double mergeWindowMargin = 8.0;
+    /** Max cosmetic bursts per storm (run of ticks with explosions). */
+    public volatile int stormEffectCap = 40;
+    /** Tick gap without explosions that ends a storm and resets the cap. */
+    public volatile int stormGapTicks = 10;
+    /**
+     * Huge affected-block lists above this size are staged automatically
+     * (even with staged mode off) so a mega-crater can't freeze one tick.
+     * Zero disables the safety net.
+     */
+    public volatile int autoStageThreshold = 16384;
+    /** Per-tick block budget used by automatic staging. */
+    public volatile int autoStageBudget = 8192;
 
     private AntiTntConfig() {
     }
@@ -107,7 +132,14 @@ public final class AntiTntConfig {
                 INSTANCE.clusterRadius = clampDouble(loaded.clusterRadius, 2.0, 16.0);
                 INSTANCE.clusterMinSize = clamp(loaded.clusterMinSize, 2, 64);
                 INSTANCE.clusterMaxPower = clampFloat(loaded.clusterMaxPower, 8.0f, 128.0f);
-                INSTANCE.clusterMaxScan = clamp(loaded.clusterMaxScan, 64, 8192);
+                INSTANCE.mergeFieldRadius = clampDouble(loaded.mergeFieldRadius, 8.0, 128.0);
+                INSTANCE.exactClusterCap = clamp(loaded.exactClusterCap, 1024, 65536);
+                INSTANCE.mergeWindowTicks = clamp(loaded.mergeWindowTicks, 0, 100);
+                INSTANCE.mergeWindowMargin = clampDouble(loaded.mergeWindowMargin, 0.0, 64.0);
+                INSTANCE.stormEffectCap = clamp(loaded.stormEffectCap, 1, 256);
+                INSTANCE.stormGapTicks = clamp(loaded.stormGapTicks, 2, 100);
+                INSTANCE.autoStageThreshold = clamp(loaded.autoStageThreshold, 0, 1048576);
+                INSTANCE.autoStageBudget = clamp(loaded.autoStageBudget, 64, 65536);
             }
         } catch (Exception e) {
             LOG.log(Level.WARNING, "[AntiTNTExplosionLag] Bad config, keeping defaults: " + e.getMessage());
@@ -128,7 +160,10 @@ public final class AntiTntConfig {
     public static void applyRaw(boolean master, boolean dedup, boolean throttle, int maxFx,
                                double radius, boolean staged, int stagedBudget, boolean diag,
                                boolean cluster, double clusterRadius, int clusterMin,
-                               float clusterMaxPower, int clusterMaxScan) {
+                               float clusterMaxPower, double mergeFieldRadius, int exactClusterCap,
+                               int mergeWindowTicks, double mergeWindowMargin,
+                               int stormEffectCap, int stormGapTicks,
+                               int autoStageThreshold, int autoStageBudget) {
         INSTANCE.masterEnabled = master;
         INSTANCE.dedupEnabled = dedup;
         INSTANCE.effectThrottleEnabled = throttle;
@@ -141,7 +176,14 @@ public final class AntiTntConfig {
         INSTANCE.clusterRadius = clampDouble(clusterRadius, 2.0, 16.0);
         INSTANCE.clusterMinSize = clamp(clusterMin, 2, 64);
         INSTANCE.clusterMaxPower = clampFloat(clusterMaxPower, 8.0f, 128.0f);
-        INSTANCE.clusterMaxScan = clamp(clusterMaxScan, 64, 8192);
+        INSTANCE.mergeFieldRadius = clampDouble(mergeFieldRadius, 8.0, 128.0);
+        INSTANCE.exactClusterCap = clamp(exactClusterCap, 1024, 65536);
+        INSTANCE.mergeWindowTicks = clamp(mergeWindowTicks, 0, 100);
+        INSTANCE.mergeWindowMargin = clampDouble(mergeWindowMargin, 0.0, 64.0);
+        INSTANCE.stormEffectCap = clamp(stormEffectCap, 1, 256);
+        INSTANCE.stormGapTicks = clamp(stormGapTicks, 2, 100);
+        INSTANCE.autoStageThreshold = clamp(autoStageThreshold, 0, 1048576);
+        INSTANCE.autoStageBudget = clamp(autoStageBudget, 64, 65536);
     }
 
     /** Legacy overload without cluster options (cluster settings untouched). */
@@ -149,7 +191,10 @@ public final class AntiTntConfig {
                                double radius, boolean staged, int stagedBudget, boolean diag) {
         applyRaw(master, dedup, throttle, maxFx, radius, staged, stagedBudget, diag,
                 INSTANCE.clusterDetonationEnabled, INSTANCE.clusterRadius, INSTANCE.clusterMinSize,
-                INSTANCE.clusterMaxPower, INSTANCE.clusterMaxScan);
+                INSTANCE.clusterMaxPower, INSTANCE.mergeFieldRadius, INSTANCE.exactClusterCap,
+                INSTANCE.mergeWindowTicks, INSTANCE.mergeWindowMargin,
+                INSTANCE.stormEffectCap, INSTANCE.stormGapTicks,
+                INSTANCE.autoStageThreshold, INSTANCE.autoStageBudget);
     }
 
     private static int clamp(int v, int min, int max) {

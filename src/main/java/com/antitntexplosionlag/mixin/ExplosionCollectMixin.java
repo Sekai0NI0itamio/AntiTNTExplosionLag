@@ -99,12 +99,19 @@ public abstract class ExplosionCollectMixin {
             return;
         }
         antiTnt$phaseStartNanos = System.nanoTime();
-        // Opt-in staged mode takes over over-budget explosions first: the
-        // first chunk is destroyed immediately with full vanilla semantics,
-        // the rest drains one chunk per server tick (see beginStaged).
-        if (cfg.stagedProcessingEnabled && getAffectedBlocks().size() > cfg.stagedBlocksPerTick) {
+        int size = getAffectedBlocks().size();
+        // Opt-in staged mode takes over over-budget explosions, and the
+        // automatic safety net catches mega-craters even when staged mode
+        // is off: the first chunk is destroyed immediately with full vanilla
+        // semantics, the rest drains one chunk per server tick (see drain).
+        if (cfg.stagedProcessingEnabled && size > cfg.stagedBlocksPerTick) {
             ci.cancel();
-            AntiTntExplosionLagMod.beginStaged((Explosion) (Object) this);
+            AntiTntExplosionLagMod.beginStaged((Explosion) (Object) this, cfg.stagedBlocksPerTick);
+            return;
+        }
+        if (cfg.autoStageThreshold > 0 && size > cfg.autoStageThreshold) {
+            ci.cancel();
+            AntiTntExplosionLagMod.beginStaged((Explosion) (Object) this, cfg.autoStageBudget);
             return;
         }
         if (!particles || !cfg.effectThrottleEnabled) {

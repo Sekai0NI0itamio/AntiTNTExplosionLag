@@ -18,7 +18,14 @@ Invalid numbers are clamped into range; corrupt files keep current defaults.
 | `clusterRadius` | double | `7.0` | 2–16 | Connection distance for cluster membership (transitive). |
 | `clusterMinSize` | int | `3` | 2–64 | Minimum connected TNT to trigger a merge; pairs/singles explode vanilla-style. |
 | `clusterMaxPower` | float | `48.0` | 8–128 | Power cap for merged blasts. |
-| `clusterMaxScan` | int | `2048` | 64–8192 | Entities visited per cluster scan (perf guard). |
+| `mergeFieldRadius` | double | `64.0` | 8–128 | Half-edge of the cube scanned for primed TNT around each ignition. |
+| `exactClusterCap` | int | `20000` | 1024–65536 | Fields above this size skip transitive precision (one dense cluster). |
+| `mergeWindowTicks` | int | `10` | 0–100 | Ticks a merged crater absorbs chain primers (`0` = no absorption). |
+| `mergeWindowMargin` | double | `8.0` | 0–64 | Extra radius beyond blast reach covered by the window. |
+| `stormEffectCap` | int | `40` | 1–256 | Max cosmetic bursts per explosion storm (sound/particle ceiling). |
+| `stormGapTicks` | int | `10` | 2–100 | Quiet gap that ends a storm and resets the ceiling. |
+| `autoStageThreshold` | int | `16384` | 0–1048576 | Affected lists above this auto-stage (`0` = off). |
+| `autoStageBudget` | int | `8192` | 64–65536 | Per-tick block budget for automatic staging. |
 
 ## Which side installs the mod
 

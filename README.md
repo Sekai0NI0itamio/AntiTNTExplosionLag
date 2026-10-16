@@ -1,8 +1,9 @@
 # AntiTNTExplosionLag
 
-Server-side Fabric mod for Minecraft Java Edition 1.21.1 that reduces server
-tick lag from large TNT detonations, chained explosions, and overlapping
-explosive workloads. Defaults preserve vanilla gameplay.
+Server-side Fabric mod for Minecraft Java Edition 1.21.1 that makes even
+million-TNT detonations resolve near-instantly: connected primed TNT merges
+into single blasts, chain echoes are absorbed, cosmetics compress to a storm
+ceiling (default 40 bursts), and mega-craters stage automatically.
 
 ## What it does
 
@@ -12,6 +13,9 @@ explosive workloads. Defaults preserve vanilla gameplay.
 | Per-tick cosmetic effect throttle via vanilla's own `affectWorld(particles=false)` path | ON | Cosmetic only — blocks still break, entities still take damage; only the duplicate particle/sound burst is skipped during same-tick storms |
 | Explosion profiler (collect/affect timings, chain counters) + `/antitnt stats` | ON | None — observation only |
 | Cluster detonation: connected primed TNT explodes as ONE merged blast | ON | Intended trade-off — one big crater immediately instead of N sequential vanilla chain blasts; disable for vanilla chaining |
+| Merge windows: chain primers inside a fresh crater are absorbed, not chained | ON | Same trade-off — a fill goes off at once instead of echoing for seconds |
+| Storm ceiling: at most 40 cosmetic bursts per explosion storm | ON | Cosmetic only — gameplay still applies; sounds/particles compressed |
+| Auto-staging for mega-craters (>16k blocks) | ON | Safety net — streams block breaking so one tick can't freeze |
 | Staged application of huge affected-block lists across ticks | OFF (opt-in) | **Changes timing** — delays block destruction and chain reactions |
 | Primed-TNT chain monitoring | ON | None — counting only |
 
@@ -53,11 +57,17 @@ redundant work around that.
   "throttleRadius": 32.0,
   "stagedProcessingEnabled": false,
     "stagedBlocksPerTick": 2048,
+    "stormEffectCap": 40,
+    "stormGapTicks": 10,
+    "autoStageThreshold": 16384,
+    "autoStageBudget": 8192,
     "clusterDetonationEnabled": true,
     "clusterRadius": 7.0,
     "clusterMinSize": 3,
     "clusterMaxPower": 48.0,
-    "clusterMaxScan": 2048,
+    "mergeFieldRadius": 64.0,
+    "exactClusterCap": 20000,
+    "mergeWindowTicks": 10,
   "diagnosticsEnabled": false
 }
 ```

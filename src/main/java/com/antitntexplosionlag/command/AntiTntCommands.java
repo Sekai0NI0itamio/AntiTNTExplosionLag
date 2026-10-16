@@ -32,7 +32,10 @@ public final class AntiTntCommands {
                                     + " cluster=" + cfg.clusterDetonationEnabled
                                     + " (radius=" + cfg.clusterRadius
                                     + " min=" + cfg.clusterMinSize
-                                    + " maxPower=" + cfg.clusterMaxPower + ")"
+                                    + " maxPower=" + cfg.clusterMaxPower
+                                    + " field=" + cfg.mergeFieldRadius
+                                    + " window=" + cfg.mergeWindowTicks + "t)"
+                                    + " stormCap=" + cfg.stormEffectCap
                                     + " diag=" + cfg.diagnosticsEnabled), false);
                     return 1;
                 }))
@@ -47,6 +50,8 @@ public final class AntiTntCommands {
                             + " stagedPending=" + AntiTntExplosionLagMod.stagedPending()
                             + " mergedClusters=" + AntiTntExplosionLagMod.CHAINS.mergedClusters()
                             + " mergedTnt=" + AntiTntExplosionLagMod.CHAINS.mergedTnt()
+                            + " absorbed=" + AntiTntExplosionLagMod.CHAINS.absorbedTnt()
+                            + " stormFx=" + AntiTntExplosionLagMod.throttler().stormEmitted()
                             + " collectAvg=" + String.format("%.2f", AntiTntExplosionLagMod.COLLECT_PROFILER.averageMs()) + "ms"
                             + " collectP95=" + String.format("%.2f", AntiTntExplosionLagMod.COLLECT_PROFILER.percentileMs(95)) + "ms"
                             + " affectAvg=" + String.format("%.2f", AntiTntExplosionLagMod.AFFECT_PROFILER.averageMs()) + "ms";

@@ -15,6 +15,8 @@ public final class ChainMonitor {
     private long totalExplosions;
     private long mergedClusters;
     private long mergedTnt;
+    private long absorbedBlasts;
+    private long absorbedTnt;
 
     public synchronized void onTntTick(long tick) {
         roll(tick);
@@ -80,6 +82,20 @@ public final class ChainMonitor {
         return mergedTnt;
     }
 
+    /** Records chain primers swallowed by a merge window (no new blast). */
+    public synchronized void onAbsorbed(int tntCount) {
+        absorbedBlasts++;
+        absorbedTnt += tntCount;
+    }
+
+    public synchronized long absorbedBlasts() {
+        return absorbedBlasts;
+    }
+
+    public synchronized long absorbedTnt() {
+        return absorbedTnt;
+    }
+
     public synchronized void reset() {
         tick = Long.MIN_VALUE;
         tntTicks = 0;
@@ -90,6 +106,8 @@ public final class ChainMonitor {
         totalExplosions = 0;
         mergedClusters = 0;
         mergedTnt = 0;
+        absorbedBlasts = 0;
+        absorbedTnt = 0;
     }
 
     private void roll(long tick) {

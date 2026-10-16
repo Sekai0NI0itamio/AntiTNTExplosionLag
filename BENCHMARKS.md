@@ -10,7 +10,11 @@
    Asserts identical verdicts; reports both averages and speedup.
 2. **Affected-list dedup** — 20,000 unique + 35% duplicates synthetic
    overlapping-blast workload; reports removed entries and avg pass time.
-3. **Scenario workload specs** — the five representative scenarios
+3. **Cluster grouping** — 9,261-point solid fill resolves into exactly 1
+   component; 100k-member centroid pass for the coarse (millions) path.
+   Storm-cap and merge-window logic are covered by unit tests
+   (long-storm suppression, gap reset, absorb/expire/prune).
+4. **Scenario workload specs** — the five representative scenarios
    (small-isolated, large-detonation, chain-reaction, overlapping-confined,
    repeated-stress) as deterministic workload descriptors.
 

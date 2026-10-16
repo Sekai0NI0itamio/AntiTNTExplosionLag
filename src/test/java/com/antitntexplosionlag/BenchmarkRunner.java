@@ -107,6 +107,26 @@ public final class BenchmarkRunner {
         md.append("- merged power for full fill: ")
                 .append(fmt(ClusterMerge.combinedPower(9261, 4.0f, 48.0f))).append(" (capped)\n\n");
 
+        // --- Coarse path: 100k-member field centroid (the millions path). ---
+        List<double[]> big = new ArrayList<>(100_000);
+        for (int i = 0; i < 100_000; i++) {
+            big.add(new double[]{i % 100, (i / 100) % 100, i / 10_000});
+        }
+        boolean coarse = ClusterMerge.useCoarseGrouping(big.size(), 20000);
+        long coarseTotal = 0;
+        double[] center = null;
+        for (int i = 0; i < MEASURED; i++) {
+            long s = System.nanoTime();
+            center = ClusterMerge.centroid(big);
+            coarseTotal += System.nanoTime() - s;
+        }
+        md.append("## Coarse grouping (100k-member field)\n\n");
+        md.append("- coarse path taken: ").append(coarse).append("\n");
+        md.append("- centroid: (").append(fmt(center[0])).append(", ")
+                .append(fmt(center[1])).append(", ").append(fmt(center[2])).append(")\n");
+        md.append("- avg centroid pass: ")
+                .append(fmt(coarseTotal / (MEASURED * 1_000_000.0))).append(" ms\n\n");
+
         // --- Scenario workload specs. ---
         md.append("## Scenario workload specs\n\n");
         md.append("| scenario | tnt | ticks | area |\n|---|---|---|---|\n");

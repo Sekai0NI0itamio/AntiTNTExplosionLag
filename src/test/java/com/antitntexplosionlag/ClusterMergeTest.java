@@ -7,6 +7,7 @@ import java.util.ArrayList;
 import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class ClusterMergeTest {
@@ -72,6 +73,14 @@ class ClusterMergeTest {
         // 9261 TNT would ask for ~84 power: capped.
         assertEquals(48.0f, ClusterMerge.combinedPower(9261, 4.0f, 48.0f), 1e-4);
         assertTrue(ClusterMerge.combinedPower(9261, 4.0f, 128.0f) < 128.0f);
+    }
+
+    @Test
+    void coarseGroupingKicksInAboveCap() {
+        assertFalse(ClusterMerge.useCoarseGrouping(20000, 20000));
+        assertFalse(ClusterMerge.useCoarseGrouping(3, 20000));
+        assertTrue(ClusterMerge.useCoarseGrouping(20001, 20000));
+        assertTrue(ClusterMerge.useCoarseGrouping(1_000_000, 20000));
     }
 
     @Test

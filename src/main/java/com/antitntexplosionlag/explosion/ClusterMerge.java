@@ -75,6 +75,16 @@ public final class ClusterMerge {
         return out;
     }
 
+    /**
+     * Decides exact vs coarse grouping. Above {@code exactCap} members the
+     * field is dense enough that transitive precision isn't worth the
+     * quadratic pass: the whole field becomes one cluster (centroid + capped
+     * power). This is the branch that keeps million-TNT fields instant.
+     */
+    public static boolean useCoarseGrouping(int memberCount, int exactCap) {
+        return memberCount > exactCap;
+    }
+
     /** Centroid of a component (detonation center for the merged blast). */
     public static double[] centroid(List<double[]> component) {
         if (component.isEmpty()) {

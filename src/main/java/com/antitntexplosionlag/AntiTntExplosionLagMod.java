@@ -6,7 +6,7 @@ import com.antitntexplosionlag.explosion.ChainMonitor;
 import com.antitntexplosionlag.explosion.ClusterMerge;
 import com.antitntexplosionlag.explosion.EffectThrottler;
 import com.antitntexplosionlag.explosion.ExplosionProfiler;
-import com.antitntexplosionlag.explosion.StagedProcessor;
+import com.antitntexplosionlag.explosion.MergeWindows;import com.antitntexplosionlag.explosion.StagedProcessor;
 import net.fabricmc.api.ModInitializer;
 import net.fabricmc.fabric.api.command.v2.CommandRegistrationCallback;
 import net.fabricmc.fabric.api.event.lifecycle.v1.ServerTickEvents;
@@ -21,11 +21,9 @@ import org.slf4j.LoggerFactory;
 
 import java.util.ArrayDeque;
 import java.util.ArrayList;
-import java.util.Collections;
 import java.util.IdentityHashMap;
 import java.util.List;
 import java.util.Queue;
-import java.util.Set;
 import java.util.concurrent.atomic.AtomicLong;
 
 /**
@@ -49,6 +47,9 @@ public class AntiTntExplosionLagMod implements ModInitializer {
     /** Pending staged remainders; appended and drained on the server thread. */
     private static final Queue<PendingStage> STAGES = new ArrayDeque<>();
 
+    /** Absorption left behind by merged blasts (kills block-fill chaining). */
+    public static final MergeWindows WINDOWS = new MergeWindows();
+
     private record PendingStage(Explosion explosion, StagedProcessor<BlockPos> rest) {
     }
 
@@ -68,7 +69,8 @@ public class AntiTntExplosionLagMod implements ModInitializer {
     /** Rebuilds the throttle policy from current config (also resets counters). */
     public static synchronized EffectThrottler rebuildThrottler() {
         AntiTntConfig cfg = AntiTntConfig.get();
-        throttler = new EffectThrottler(cfg.maxEffectsPerTick, cfg.throttleRadius);
+        throttler = new EffectThrottler(cfg.maxEffectsPerTick, cfg.throttleRadius,
+                cfg.stormEffectCap, cfg.stormGapTicks);
         return throttler;
     }
 
@@ -107,10 +109,10 @@ public class AntiTntExplosionLagMod implements ModInitializer {
      * already cancelled. Re-entrant {@code affectWorld} calls for the first
      * chunk carry a within-budget list, so they proceed normally.
      */
-    public static void beginStaged(Explosion explosion) {
+    public static void beginStaged(Explosion explosion, int budgetPerTick) {
         AntiTntConfig cfg = AntiTntConfig.get();
         List<BlockPos> all = new ArrayList<>(explosion.getAffectedBlocks());
-        StagedProcessor<BlockPos> plan = new StagedProcessor<>(all, cfg.stagedBlocksPerTick);
+        StagedProcessor<BlockPos> plan = new StagedProcessor<>(all, budgetPerTick);
         List<BlockPos> first = plan.nextChunk();
         explosion.getAffectedBlocks().clear();
         explosion.getAffectedBlocks().addAll(first);
@@ -127,7 +129,7 @@ public class AntiTntExplosionLagMod implements ModInitializer {
     }
 
     private static void drainStaged() {
-        if (!AntiTntConfig.get().masterEnabled || !AntiTntConfig.get().stagedProcessingEnabled) {
+        if (!AntiTntConfig.get().masterEnabled) {
             return;
         }
         // Bound the catch-up work per tick so the drain itself can't spike.
@@ -170,44 +172,40 @@ public class AntiTntExplosionLagMod implements ModInitializer {
     }
 
     /**
-     * Finds the transitively connected cluster of primed TNT around
-     * {@code root}: every member is within {@code radius} of at least one
-     * other member. Bounded by {@code maxScan} visited entities so a huge
-     * field can't stall the tick during the scan itself. Server thread only.
+     * Groups the primed-TNT field around {@code root} with ONE bulk entity
+     * query (no per-entity BFS, so even huge fields resolve in one pass).
+     * Small fields get exact transitive components; fields above the exact
+     * cap become a single dense cluster. Server thread only.
      */
-    public static List<TntEntity> collectCluster(World world, TntEntity root, double radius, int maxScan) {
-        List<TntEntity> found = new ArrayList<>();
-        Set<TntEntity> seen = Collections.newSetFromMap(new IdentityHashMap<>());
-        ArrayDeque<TntEntity> queue = new ArrayDeque<>();
-        seen.add(root);
-        queue.add(root);
-        found.add(root);
-        double r2 = radius * radius;
-        while (!queue.isEmpty() && found.size() < maxScan) {
-            TntEntity cur = queue.poll();
-            double cx = cur.getX();
-            double cy = cur.getY();
-            double cz = cur.getZ();
-            Box box = new Box(cx - radius, cy - radius, cz - radius,
-                    cx + radius, cy + radius, cz + radius);
-            for (TntEntity t : world.getEntitiesByClass(TntEntity.class, box, Entity::isAlive)) {
-                if (!seen.add(t)) {
-                    continue;
-                }
-                double dx = t.getX() - cx;
-                double dy = t.getY() - cy;
-                double dz = t.getZ() - cz;
-                if (dx * dx + dy * dy + dz * dz > r2) {
-                    continue;
-                }
-                found.add(t);
-                queue.add(t);
-                if (found.size() >= maxScan) {
-                    break;
-                }
-            }
+    public static List<List<TntEntity>> groupField(World world, TntEntity root) {
+        AntiTntConfig cfg = AntiTntConfig.get();
+        double r = cfg.mergeFieldRadius;
+        Box box = new Box(root.getX() - r, root.getY() - r, root.getZ() - r,
+                root.getX() + r, root.getY() + r, root.getZ() + r);
+        List<TntEntity> all = new ArrayList<>(
+                world.getEntitiesByClass(TntEntity.class, box, Entity::isAlive));
+        if (all.size() < 2) {
+            return List.of(all);
         }
-        return found;
+        if (ClusterMerge.useCoarseGrouping(all.size(), cfg.exactClusterCap)) {
+            return List.of(all);
+        }
+        IdentityHashMap<double[], TntEntity> byPos = new IdentityHashMap<>(all.size() * 2);
+        List<double[]> points = new ArrayList<>(all.size());
+        for (TntEntity t : all) {
+            double[] p = new double[]{t.getX(), t.getY(), t.getZ()};
+            points.add(p);
+            byPos.put(p, t);
+        }
+        List<List<TntEntity>> groups = new ArrayList<>();
+        for (List<double[]> comp : ClusterMerge.components(points, cfg.clusterRadius)) {
+            List<TntEntity> group = new ArrayList<>(comp.size());
+            for (double[] p : comp) {
+                group.add(byPos.get(p));
+            }
+            groups.add(group);
+        }
+        return groups;
     }
 
     /**
@@ -236,6 +234,10 @@ public class AntiTntExplosionLagMod implements ModInitializer {
         }
         world.createExplosion(cause, center[0], center[1], center[2], power,
                 World.ExplosionSourceType.TNT);
+        if (cfg.mergeWindowTicks > 0) {
+            WINDOWS.add(center[0], center[1], center[2],
+                    power * 2.0 + cfg.mergeWindowMargin, serverTick + cfg.mergeWindowTicks);
+        }
         return cluster.size();
     }
 
