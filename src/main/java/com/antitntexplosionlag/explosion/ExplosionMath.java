@@ -19,10 +19,11 @@ public final class ExplosionMath {
 
     // ------------------------------------------------------------------
     // Packed block positions (internal use only, NOT vanilla packing).
-    // 26 bits per axis is plenty for loaded regions; reversible and fast.
+    // 21 bits per axis (63 bits total) cover +/-1M per axis, plenty for
+    // loaded regions; reversible and fast.
     // ------------------------------------------------------------------
 
-    private static final int BITS = 26;
+    private static final int BITS = 21;
     private static final long MASK = (1L << BITS) - 1;
     private static final int BIAS = 1 << (BITS - 1);
 

@@ -26,6 +26,9 @@ public final class BenchmarkPlan {
     /**
      * Builds a synthetic affected-position workload with a controlled
      * duplicate ratio, modelling overlapping blasts that revisit blocks.
+     * Unique entries are index-derived (collision-free by construction);
+     * duplicates and shuffle order come from a deterministic stream, so the
+     * same seed always yields the same list.
      */
     public static List<Long> syntheticWorkload(int uniqueBlocks, double duplicateRatio, long seed) {
         if (uniqueBlocks < 0) {
@@ -38,18 +41,16 @@ public final class BenchmarkPlan {
         List<Long> out = new ArrayList<>();
         List<Long> uniques = new ArrayList<>(uniqueBlocks);
         for (int i = 0; i < uniqueBlocks; i++) {
-            state = mix(state);
-            int x = (int) (Math.floorMod(state, 96)) - 48;
-            state = mix(state);
-            int y = (int) (Math.floorMod(state, 64)) - 32;
-            state = mix(state);
-            int z = (int) (Math.floorMod(state, 96)) - 48;
+            // Grid-derived coordinates: unique for i < 96*64*96.
+            int x = (i % 96) - 48;
+            int y = ((i / 96) % 64) - 32;
+            int z = ((i / (96 * 64)) % 96) - 48;
             long packed = pack(x, y, z);
             uniques.add(packed);
             out.add(packed);
         }
         int dups = (int) (uniqueBlocks * duplicateRatio);
-        for (int i = 0; i < dups; i++) {
+        for (int i = 0; i < dups && !uniques.isEmpty(); i++) {
             state = mix(state);
             out.add(uniques.get((int) Math.floorMod(state, uniques.size())));
         }
