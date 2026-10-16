@@ -1,0 +1,13 @@
+{
+  "required": true,
+  "minVersion": "0.8",
+  "package": "com.antitntexplosionlag.mixin",
+  "compatibilityLevel": "JAVA_21",
+  "server": [
+    "ExplosionCollectMixin",
+    "TntEntityMixin"
+  ],
+  "injectors": {
+    "defaultRequire": 1
+  }
+}
