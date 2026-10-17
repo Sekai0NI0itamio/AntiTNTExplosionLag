@@ -71,11 +71,11 @@ public final class AntiTntConfig {
     /** Connection distance (blocks) for cluster membership, transitive. */
     public volatile double clusterRadius = 7.0;
     /** Minimum cluster size to merge; smaller groups explode vanilla-style. */
-    public volatile int clusterMinSize = 3;
+    public volatile int clusterMinSize = 2;
     /** Hard cap on merged-blast power. */
     public volatile float clusterMaxPower = 48.0f;
     /** Half-edge of the cube scanned for primed TNT around an ignition. */
-    public volatile double mergeFieldRadius = 64.0;
+    public volatile double mergeFieldRadius = 128.0;
     /**
      * Field populations at or below this size get exact transitive grouping;
      * larger fields are treated as one dense cluster (centroid + capped

@@ -10,7 +10,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 class AntiTntConfigTest {
     private static void defaults() {
         AntiTntConfig.applyRaw(true, true, true, 4, 32.0, false, 2048, false,
-                true, 7.0, 3, 48.0f, 64.0, 20000, 10, 8.0, 40, 10, 16384, 8192);
+                true, 7.0, 2, 48.0f, 128.0, 20000, 10, 8.0, 40, 10, 16384, 8192);
     }
 
     @Test
@@ -26,9 +26,9 @@ class AntiTntConfigTest {
         assertEquals(2048, cfg.stagedBlocksPerTick);
         assertTrue(cfg.clusterDetonationEnabled);
         assertEquals(7.0, cfg.clusterRadius);
-        assertEquals(3, cfg.clusterMinSize);
+        assertEquals(2, cfg.clusterMinSize);
         assertEquals(48.0f, cfg.clusterMaxPower);
-        assertEquals(64.0, cfg.mergeFieldRadius);
+        assertEquals(128.0, cfg.mergeFieldRadius);
         assertEquals(20000, cfg.exactClusterCap);
         assertEquals(10, cfg.mergeWindowTicks);
         assertEquals(8.0, cfg.mergeWindowMargin);
@@ -76,7 +76,7 @@ class AntiTntConfigTest {
         assertEquals(65536, cfg.autoStageBudget);
 
         AntiTntConfig.applyRaw(true, true, true, 4, Double.NaN, false, 2048, false,
-                true, 7.0, 3, Float.NaN, 64.0, 20000, 10, 8.0, 40, 10, 16384, 8192);
+                true, 7.0, 2, Float.NaN, 128.0, 20000, 10, 8.0, 40, 10, 16384, 8192);
         assertEquals(4.0, cfg.throttleRadius);
         assertEquals(8.0f, cfg.clusterMaxPower);
     }

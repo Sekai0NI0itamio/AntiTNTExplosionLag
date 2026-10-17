@@ -63,6 +63,20 @@ public final class AntiTntCommands {
                     AntiTntExplosionLagMod.rebuildThrottler();
                     ctx.getSource().sendFeedback(() -> Text.literal("[AntiTNT] config reloaded."), true);
                     return 1;
+                }))
+                .then(literal("debug").executes(ctx -> {
+                    long tick = AntiTntExplosionLagMod.serverTick();
+                    String msg = "[AntiTNT debug] tick=" + tick
+                            + " liveWindows=" + AntiTntExplosionLagMod.WINDOWS.liveCount(tick)
+                            + " stagedPending=" + AntiTntExplosionLagMod.stagedPending()
+                            + " mergedClusters=" + AntiTntExplosionLagMod.CHAINS.mergedClusters()
+                            + " mergedTnt=" + AntiTntExplosionLagMod.CHAINS.mergedTnt()
+                            + " absorbedBlasts=" + AntiTntExplosionLagMod.CHAINS.absorbedBlasts()
+                            + " absorbedTnt=" + AntiTntExplosionLagMod.CHAINS.absorbedTnt()
+                            + " stormFx=" + AntiTntExplosionLagMod.throttler().stormEmitted()
+                            + " suppressedTotal=" + AntiTntExplosionLagMod.throttler().suppressedTotal();
+                    ctx.getSource().sendFeedback(() -> Text.literal(msg), false);
+                    return 1;
                 })));
     }
 }

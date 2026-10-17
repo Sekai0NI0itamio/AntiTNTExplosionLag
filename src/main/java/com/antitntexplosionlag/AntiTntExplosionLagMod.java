@@ -3,25 +3,20 @@ package com.antitntexplosionlag;
 import com.antitntexplosionlag.command.AntiTntCommands;
 import com.antitntexplosionlag.config.AntiTntConfig;
 import com.antitntexplosionlag.explosion.ChainMonitor;
-import com.antitntexplosionlag.explosion.ClusterMerge;
 import com.antitntexplosionlag.explosion.EffectThrottler;
 import com.antitntexplosionlag.explosion.ExplosionProfiler;
-import com.antitntexplosionlag.explosion.MergeWindows;import com.antitntexplosionlag.explosion.StagedProcessor;
+import com.antitntexplosionlag.explosion.MergeWindows;
+import com.antitntexplosionlag.explosion.StagedProcessor;
 import net.fabricmc.api.ModInitializer;
 import net.fabricmc.fabric.api.command.v2.CommandRegistrationCallback;
 import net.fabricmc.fabric.api.event.lifecycle.v1.ServerTickEvents;
-import net.minecraft.entity.Entity;
-import net.minecraft.entity.TntEntity;
 import net.minecraft.util.math.BlockPos;
-import net.minecraft.util.math.Box;
-import net.minecraft.world.World;
 import net.minecraft.world.explosion.Explosion;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.util.ArrayDeque;
 import java.util.ArrayList;
-import java.util.IdentityHashMap;
 import java.util.List;
 import java.util.Queue;
 import java.util.concurrent.atomic.AtomicLong;
@@ -132,7 +127,6 @@ public class AntiTntExplosionLagMod implements ModInitializer {
         if (!AntiTntConfig.get().masterEnabled) {
             return;
         }
-        // Bound the catch-up work per tick so the drain itself can't spike.
         int stagesThisTick = 0;
         while (stagesThisTick < 4) {
             PendingStage head;
@@ -152,8 +146,6 @@ public class AntiTntExplosionLagMod implements ModInitializer {
             try {
                 head.explosion.getAffectedBlocks().clear();
                 head.explosion.getAffectedBlocks().addAll(chunk);
-                // Damage was already applied once during collection; only the
-                // block destruction (with vanilla per-block semantics) repeats.
                 head.explosion.affectWorld(false);
             } catch (Exception e) {
                 LOG.warn("[AntiTNTExplosionLag] dropping staged remainder: {}", e.toString());
@@ -171,76 +163,6 @@ public class AntiTntExplosionLagMod implements ModInitializer {
         }
     }
 
-    /**
-     * Groups the primed-TNT field around {@code root} with ONE bulk entity
-     * query (no per-entity BFS, so even huge fields resolve in one pass).
-     * Small fields get exact transitive components; fields above the exact
-     * cap become a single dense cluster. Server thread only.
-     */
-    public static List<List<TntEntity>> groupField(World world, TntEntity root) {
-        AntiTntConfig cfg = AntiTntConfig.get();
-        double r = cfg.mergeFieldRadius;
-        Box box = new Box(root.getX() - r, root.getY() - r, root.getZ() - r,
-                root.getX() + r, root.getY() + r, root.getZ() + r);
-        List<TntEntity> all = new ArrayList<>(
-                world.getEntitiesByClass(TntEntity.class, box, Entity::isAlive));
-        if (all.size() < 2) {
-            return List.of(all);
-        }
-        if (ClusterMerge.useCoarseGrouping(all.size(), cfg.exactClusterCap)) {
-            return List.of(all);
-        }
-        IdentityHashMap<double[], TntEntity> byPos = new IdentityHashMap<>(all.size() * 2);
-        List<double[]> points = new ArrayList<>(all.size());
-        for (TntEntity t : all) {
-            double[] p = new double[]{t.getX(), t.getY(), t.getZ()};
-            points.add(p);
-            byPos.put(p, t);
-        }
-        List<List<TntEntity>> groups = new ArrayList<>();
-        for (List<double[]> comp : ClusterMerge.components(points, cfg.clusterRadius)) {
-            List<TntEntity> group = new ArrayList<>(comp.size());
-            for (double[] p : comp) {
-                group.add(byPos.get(p));
-            }
-            groups.add(group);
-        }
-        return groups;
-    }
-
-    /**
-     * Replaces a connected TNT cluster with a single merged blast at its
-     * centroid. All members are discarded first, then one vanilla explosion
-     * with combined power runs the normal collect/affect path (so dedup,
-     * throttle, profiler, and staged logic all still apply to it).
-     *
-     * @return number of TNT merged
-     */
-    public static int mergeAndDetonate(World world, List<TntEntity> cluster, TntEntity cause) {
-        AntiTntConfig cfg = AntiTntConfig.get();
-        List<double[]> points = new ArrayList<>(cluster.size());
-        for (TntEntity t : cluster) {
-            points.add(new double[]{t.getX(), t.getY(), t.getZ()});
-        }
-        double[] center = ClusterMerge.centroid(points);
-        float power = ClusterMerge.combinedPower(cluster.size(), 4.0f, cfg.clusterMaxPower);
-        for (TntEntity t : cluster) {
-            t.remove(Entity.RemovalReason.DISCARDED);
-        }
-        CHAINS.onMerged(cluster.size());
-        if (cfg.diagnosticsEnabled) {
-            LOG.info("[AntiTNTExplosionLag] merged {} connected TNT into one power-{} blast",
-                    cluster.size(), String.format("%.1f", power));
-        }
-        world.createExplosion(cause, center[0], center[1], center[2], power,
-                World.ExplosionSourceType.TNT);
-        if (cfg.mergeWindowTicks > 0) {
-            WINDOWS.add(center[0], center[1], center[2],
-                    power * 2.0 + cfg.mergeWindowMargin, serverTick + cfg.mergeWindowTicks);
-        }
-        return cluster.size();
-    }
-
     @Override
     public void onInitialize() {
         AntiTntConfig.load();
@@ -250,12 +172,21 @@ public class AntiTntExplosionLagMod implements ModInitializer {
         ServerTickEvents.START_SERVER_TICK.register(server -> serverTick = server.getTicks());
         ServerTickEvents.END_SERVER_TICK.register(server -> drainStaged());
         AntiTntConfig cfg = AntiTntConfig.get();
-        LOG.info("[AntiTNTExplosionLag] initialized: master={} dedup={} throttle={} (maxFx={} radius={}) "
-                        + "staged={} (budget={}) cluster={} (radius={} min={} maxPower={}) diag={}",
+        LOG.info("================================================");
+        LOG.info("[AntiTNTExplosionLag] MOD ACTIVE — version 1.2.0");
+        LOG.info("[AntiTNTExplosionLag] master={} dedup={} throttle={} (maxFx={} radius={})",
                 cfg.masterEnabled, cfg.dedupEnabled, cfg.effectThrottleEnabled,
-                cfg.maxEffectsPerTick, cfg.throttleRadius,
-                cfg.stagedProcessingEnabled, cfg.stagedBlocksPerTick,
+                cfg.maxEffectsPerTick, cfg.throttleRadius);
+        LOG.info("[AntiTNTExplosionLag] clusterDetonation={} (radius={} min={} maxPower={}) "
+                        + "fieldRadius={} windowTicks={} margin={}",
                 cfg.clusterDetonationEnabled, cfg.clusterRadius, cfg.clusterMinSize,
-                cfg.clusterMaxPower, cfg.diagnosticsEnabled);
+                cfg.clusterMaxPower, cfg.mergeFieldRadius, cfg.mergeWindowTicks,
+                cfg.mergeWindowMargin);
+        LOG.info("[AntiTNTExplosionLag] stormEffectCap={} stormGapTicks={} "
+                        + "autoStageThreshold={} autoStageBudget={}",
+                cfg.stormEffectCap, cfg.stormGapTicks,
+                cfg.autoStageThreshold, cfg.autoStageBudget);
+        LOG.info("[AntiTNTExplosionLag] Use /antitnt status to verify, /antitnt debug for internals.");
+        LOG.info("================================================");
     }
 }

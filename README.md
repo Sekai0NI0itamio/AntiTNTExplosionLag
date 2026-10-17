@@ -63,9 +63,9 @@ redundant work around that.
     "autoStageBudget": 8192,
     "clusterDetonationEnabled": true,
     "clusterRadius": 7.0,
-    "clusterMinSize": 3,
+    "clusterMinSize": 2,
     "clusterMaxPower": 48.0,
-    "mergeFieldRadius": 64.0,
+    "mergeFieldRadius": 128.0,
     "exactClusterCap": 20000,
     "mergeWindowTicks": 10,
   "diagnosticsEnabled": false

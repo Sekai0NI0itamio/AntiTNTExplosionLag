@@ -16,9 +16,9 @@ Invalid numbers are clamped into range; corrupt files keep current defaults.
 
 | `clusterDetonationEnabled` | bool | `true` | — | Merge transitively connected primed TNT into one blast (combined power `4*cbrt(n)`, capped). One big crater at once instead of a sequential chain. Set `false` for vanilla chaining. |
 | `clusterRadius` | double | `7.0` | 2–16 | Connection distance for cluster membership (transitive). |
-| `clusterMinSize` | int | `3` | 2–64 | Minimum connected TNT to trigger a merge; pairs/singles explode vanilla-style. |
+| `clusterMinSize` | int | `2` | 2–64 | Minimum connected TNT to trigger a merge; pairs/singles explode vanilla-style. |
 | `clusterMaxPower` | float | `48.0` | 8–128 | Power cap for merged blasts. |
-| `mergeFieldRadius` | double | `64.0` | 8–128 | Half-edge of the cube scanned for primed TNT around each ignition. |
+| `mergeFieldRadius` | double | `128.0` | 8–128 | Half-edge of the cube scanned for primed TNT around each ignition. |
 | `exactClusterCap` | int | `20000` | 1024–65536 | Fields above this size skip transitive precision (one dense cluster). |
 | `mergeWindowTicks` | int | `10` | 0–100 | Ticks a merged crater absorbs chain primers (`0` = no absorption). |
 | `mergeWindowMargin` | double | `8.0` | 0–64 | Extra radius beyond blast reach covered by the window. |
