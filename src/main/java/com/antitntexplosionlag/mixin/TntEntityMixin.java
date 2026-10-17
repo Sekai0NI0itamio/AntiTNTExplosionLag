@@ -2,6 +2,7 @@ package com.antitntexplosionlag.mixin;
 
 import com.antitntexplosionlag.AntiTntExplosionLagMod;
 import com.antitntexplosionlag.config.AntiTntConfig;
+import com.antitntexplosionlag.explosion.ClusterMerge;
 import net.minecraft.entity.Entity;
 import net.minecraft.entity.TntEntity;
 import net.minecraft.util.math.Box;
